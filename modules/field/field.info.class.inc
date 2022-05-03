@@ -138,7 +138,7 @@ class FieldInfo {
 
     $map = array();
 
-    $query = db_query('SELECT fc.type, fci.field_name, fci.entity_type, fci.bundle FROM {field_config_instance} fci INNER JOIN {field_config} fc ON fc.id = fci.field_id WHERE fc.active = 1 AND fc.storage_active = 1 AND fc.deleted = 0 AND fci.deleted = 0');
+    $query = db_query('SELECT fc.type, fci.field_name, fci.entity_type, fci.bundle FROM {field_config_instance} fci INNER JOIN {field_config} fc ON fc.id = fci.field_id WHERE fc.active = 1 AND fc.storage_active = 1 AND fc.deleted = 0 AND fci.deleted = 0 ORDER BY bundle, entity_type');
     foreach ($query as $row) {
       $map[$row->field_name]['bundles'][$row->entity_type][] = $row->bundle;
       $map[$row->field_name]['type'] = $row->type;
@@ -612,10 +612,12 @@ class FieldInfo {
     // Fill in default values.
     $display += array(
       'label' => 'above',
-      'type' => $field_type_info['default_formatter'],
       'settings' => array(),
       'weight' => 0,
     );
+    if (empty($display['type'])) {
+      $display['type'] = $field_type_info['default_formatter'];
+    }
     if ($display['type'] != 'hidden') {
       $formatter_type_info = field_info_formatter_types($display['type']);
       // Fall back to default formatter if formatter type is not available.

@@ -154,7 +154,7 @@ function simpletest_run_tests($test_list, $reporter = 'drupal') {
 }
 
 /**
- * Batch operation callback.
+ * Implements callback_batch_operation().
  */
 function _simpletest_batch_operation($test_list_init, $test_id, &$context) {
   simpletest_classloader_register();
@@ -205,6 +205,9 @@ function _simpletest_batch_operation($test_list_init, $test_id, &$context) {
   $context['finished'] = 1 - $size / $max;
 }
 
+/**
+ * Implements callback_batch_finished().
+ */
 function _simpletest_batch_finished($success, $results, $operations, $elapsed) {
   if ($success) {
     drupal_set_message(t('The test run finished in @elapsed.', array('@elapsed' => $elapsed)));
@@ -371,7 +374,10 @@ function simpletest_test_get_all() {
           // If this test class requires a non-existing module, skip it.
           if (!empty($info['dependencies'])) {
             foreach ($info['dependencies'] as $module) {
-              if (!drupal_get_filename('module', $module)) {
+              // Pass FALSE as fourth argument so no error gets created for
+              // the missing file.
+              $found_module = drupal_get_filename('module', $module, NULL, FALSE);
+              if (!$found_module) {
                 continue 2;
               }
             }
@@ -509,25 +515,25 @@ function simpletest_registry_files_alter(&$files, $modules) {
  * Generate test file.
  */
 function simpletest_generate_file($filename, $width, $lines, $type = 'binary-text') {
-  $size = $width * $lines - $lines;
-
-  // Generate random text
   $text = '';
-  for ($i = 0; $i < $size; $i++) {
-    switch ($type) {
-      case 'text':
-        $text .= chr(rand(32, 126));
-        break;
-      case 'binary':
-        $text .= chr(rand(0, 31));
-        break;
-      case 'binary-text':
-      default:
-        $text .= rand(0, 1);
-        break;
+  for ($i = 0; $i < $lines; $i++) {
+    // Generate $width - 1 characters to leave space for the "\n" character.
+    for ($j = 0; $j < $width - 1; $j++) {
+      switch ($type) {
+        case 'text':
+          $text .= chr(rand(32, 126));
+          break;
+        case 'binary':
+          $text .= chr(rand(0, 31));
+          break;
+        case 'binary-text':
+        default:
+          $text .= rand(0, 1);
+          break;
+      }
     }
+    $text .= "\n";
   }
-  $text = wordwrap($text, $width - 1, "\n", TRUE) . "\n"; // Add \n for symmetrical file.
 
   // Create filename.
   file_put_contents('public://' . $filename . '.txt', $text);
@@ -557,7 +563,7 @@ function simpletest_clean_environment() {
  * Removed prefixed tables from the database that are left over from crashed tests.
  */
 function simpletest_clean_database() {
-  $tables = db_find_tables(Database::getConnection()->prefixTables('{simpletest}') . '%');
+  $tables = db_find_tables_d8(Database::getConnection()->prefixTables('{simpletest}') . '%');
   $schema = drupal_get_schema_unprocessed('simpletest');
   $count = 0;
   foreach (array_diff_key($tables, $schema) as $table) {
@@ -586,7 +592,8 @@ function simpletest_clean_temporary_directories() {
     $files = scandir('public://simpletest');
     foreach ($files as $file) {
       $path = 'public://simpletest/' . $file;
-      if (is_dir($path) && is_numeric($file)) {
+      // Ensure that cache directories are cleaned as well.
+      if (is_dir($path) && (is_numeric($file) || strpos($file, '1c') === 0)) {
         file_unmanaged_delete_recursive($path);
         $count++;
       }
